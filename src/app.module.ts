@@ -13,6 +13,7 @@ import { ProveedorModule } from './proveedor/proveedor.module';
 import { CompraProductoModule } from './compra-producto/compra-producto.module';
 import { DetalleCompraModule } from './detalle-compra/detalle-compra.module';
 import { CategoriaServicioModule } from './categoria-servicio/categoria-servicio.module';
+import { VentaModule } from './venta/venta.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { CategoriaServicioModule } from './categoria-servicio/categoria-servicio
     CompraProductoModule,
     DetalleCompraModule,
     CategoriaServicioModule,
+    VentaModule,
   ],
 })
 export class AppModule {}

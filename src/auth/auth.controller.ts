@@ -1,9 +1,10 @@
-import { Controller, Post, Body, Request, Get, Param, Patch, Delete, Res, ParseIntPipe } from '@nestjs/common';
+import { Controller, Post, Body, Request, Get, Param, Patch, Delete, Res, ParseIntPipe, Put } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { SuperAdminGuard } from './guards/superadmin.guard';
 import { UseGuards } from '@nestjs/common';
 import { Role } from './entities/user.entity';
 
@@ -72,6 +73,53 @@ export class AuthController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.authService.remove(+id);
+  }
+
+  // ============ ENDPOINTS SUPERADMIN ============
+  
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Post('superadmin/create-admin')
+  async createAdmin(@Body() registerDto: RegisterDto) {
+    registerDto.role = Role.ADMINISTRADOR;
+    return this.authService.register(registerDto);
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Post('superadmin/create-barber')
+  async createBarberBySuperAdmin(@Body() registerDto: RegisterDto) {
+    registerDto.role = Role.BARBERO;
+    return this.authService.register(registerDto);
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Post('superadmin/create-client')
+  async createClient(@Body() registerDto: RegisterDto) {
+    registerDto.role = Role.CLIENTE;
+    return this.authService.register(registerDto);
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Put('superadmin/update-user/:id')
+  async updateUser(@Param('id', ParseIntPipe) id: number, @Body() updateDto: Partial<RegisterDto>) {
+    return this.authService.updateUser(id, updateDto);
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Patch('superadmin/toggle-status/:id')
+  async toggleUserStatus(@Param('id', ParseIntPipe) id: number) {
+    return this.authService.toggleUserStatus(id);
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get('superadmin/users-by-role/:role')
+  async getUsersByRole(@Param('role') role: Role) {
+    return this.authService.getUsersByRole(role);
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get('superadmin/statistics')
+  async getStatistics() {
+    return this.authService.getStatistics();
   }
   
 }

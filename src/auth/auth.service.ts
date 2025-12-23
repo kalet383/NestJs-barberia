@@ -205,4 +205,110 @@ export class AuthService {
   async findUserById(id: number) {
     return this.usersRepository.findOne({ where: { id } });
   }
+
+  // ============ MÉTODOS SUPERADMIN ============
+
+  /**
+   * Actualizar información de un usuario (solo superadmin)
+   */
+  async updateUser(id: number, updateDto: Partial<RegisterDto>) {
+    const user = await this.findOne(id);
+
+    // Si se actualiza el email, verificar que no exista
+    if (updateDto.email && updateDto.email !== user.email) {
+      const existingUser = await this.usersRepository.findOne({ 
+        where: { email: updateDto.email } 
+      });
+      if (existingUser) {
+        throw new BadRequestException('Este Email ya está en uso');
+      }
+    }
+
+    // Si se actualiza la contraseña, hashearla
+    if (updateDto.password) {
+      updateDto.password = await bcrypt.hash(updateDto.password, 10);
+    }
+
+    // Actualizar campos
+    Object.assign(user, updateDto);
+    const updatedUser = await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      mensaje: 'Usuario actualizado exitosamente',
+      user: updatedUser,
+    };
+  }
+
+  /**
+   * Activar/Desactivar usuario (dar de baja)
+   */
+  async toggleUserStatus(id: number) {
+    const user = await this.findOne(id);
+    
+    user.activo = !user.activo;
+    const updatedUser = await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      mensaje: `Usuario ${updatedUser.activo ? 'activado' : 'desactivado'} exitosamente`,
+      user: updatedUser,
+    };
+  }
+
+  /**
+   * Obtener usuarios por rol
+   */
+  async getUsersByRole(role: Role) {
+    const users = await this.usersRepository.find({
+      where: { role },
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      role,
+      total: users.length,
+      users,
+    };
+  }
+
+  /**
+   * Obtener estadísticas generales del sistema
+   */
+  async getStatistics() {
+    const totalUsers = await this.usersRepository.count();
+    const activeUsers = await this.usersRepository.count({ where: { activo: true } });
+    const inactiveUsers = await this.usersRepository.count({ where: { activo: false } });
+
+    const adminCount = await this.usersRepository.count({ where: { role: Role.ADMINISTRADOR } });
+    const barberCount = await this.usersRepository.count({ where: { role: Role.BARBERO } });
+    const clientCount = await this.usersRepository.count({ where: { role: Role.CLIENTE } });
+    const superadminCount = await this.usersRepository.count({ where: { role: Role.SUPERADMIN } });
+
+    // Usuarios recientes (últimos 7 días)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const recentUsers = await this.usersRepository
+      .createQueryBuilder('user')
+      .where('user.createdAt >= :date', { date: sevenDaysAgo })
+      .getCount();
+
+    return {
+      totalUsers,
+      activeUsers,
+      inactiveUsers,
+      usersByRole: {
+        superadmin: superadminCount,
+        administrador: adminCount,
+        barbero: barberCount,
+        cliente: clientCount,
+      },
+      recentUsers,
+      statistics: {
+        activePercentage: totalUsers > 0 ? ((activeUsers / totalUsers) * 100).toFixed(2) : 0,
+        inactivePercentage: totalUsers > 0 ? ((inactiveUsers / totalUsers) * 100).toFixed(2) : 0,
+      },
+    };
+  }
 }
