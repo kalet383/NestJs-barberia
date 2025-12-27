@@ -13,6 +13,11 @@ export class VentaController {
     return this.ventaService.create(createVentaDto);
   }
 
+  @Post('bulk')
+  createBulk(@Body() createVentaDtos: CreateVentaDto[]) {
+    return this.ventaService.createBulk(createVentaDtos);
+  }
+
   @Get()
   findAll() {
     return this.ventaService.findAll();
