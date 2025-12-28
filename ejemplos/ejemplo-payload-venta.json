@@ -1,0 +1,21 @@
+{
+  "clienteId": 1,
+  "barberoId": 2,
+  "items": [
+    {
+      "productoId": 1,
+      "cantidad": 2
+    },
+    {
+      "productoId": 3,
+      "cantidad": 1
+    },
+    {
+      "productoId": 5,
+      "cantidad": 3
+    }
+  ],
+  "tipoPago": "efectivo",
+  "notas": "Venta realizada en tienda física"
+}
+
