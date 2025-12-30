@@ -1,176 +1,137 @@
-
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'; 
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In } from 'typeorm';
+import { Repository, DataSource, Between } from 'typeorm';
+import { Venta, EstadoVenta } from './entities/venta.entity';
+import { DetalleVenta } from 'src/detalle-venta/entities/detalle-venta.entity';
+import { Producto } from 'src/producto/entities/producto.entity';
+import { User, Role } from 'src/auth/entities/user.entity';
 import { CreateVentaDto } from './dto/create-venta.dto';
 import { UpdateVentaDto } from './dto/update-venta.dto';
-import { Venta } from './entities/venta.entity';
-import { User } from 'src/auth/entities/user.entity';
-import { Producto } from 'src/producto/entities/producto.entity';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class VentaService {
   constructor(
     @InjectRepository(Venta)
     private ventaRepository: Repository<Venta>,
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
+    @InjectRepository(DetalleVenta)
+    private detalleVentaRepository: Repository<DetalleVenta>,
     @InjectRepository(Producto)
     private productoRepository: Repository<Producto>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    private dataSource: DataSource,
+    private notificationService: NotificationService,
   ) {}
 
   async create(createVentaDto: CreateVentaDto) {
-    const { clienteId, barberoId, productoId, cantidad, tipoPago, notas } = createVentaDto;
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // Verificar que el cliente existe
-    const cliente = await this.userRepository.findOne({ where: { id: clienteId } });
-    if (!cliente) {
-      throw new NotFoundException(`Cliente con ID ${clienteId} no encontrado`);      
-    }
+    try {
+      // Verificar que el cliente existe
+      const cliente = await this.userRepository.findOne({
+        where: { id: createVentaDto.clienteId }
+      });
 
-    // Verificar que el producto existe
-    const producto = await this.productoRepository.findOne({ where: { id: productoId } });
-    if (!producto) {
-      throw new NotFoundException(`Producto con ID ${productoId} no encontrado`);    
-    }
-
-    // Verificar stock disponible
-    if (producto.stock < cantidad) {
-      throw new BadRequestException(
-        `Stock insuficiente. Disponible: ${producto.stock}, Solicitado: ${cantidad}` 
-      );
-    }
-
-    // Verificar barbero si se proporciona
-    let barbero: User | undefined = undefined;
-    if (barberoId) {
-      const barberoFound = await this.userRepository.findOne({ where: { id: barberoId } });
-      if (!barberoFound) {
-        throw new NotFoundException(`Barbero con ID ${barberoId} no encontrado`);    
+      if (!cliente) {
+        throw new NotFoundException('Cliente no encontrado');
       }
-      barbero = barberoFound;
-    }
 
-    // Calcular total (usar precio_venta)
-    const precioUnitario = parseFloat(producto.precio_venta.toString());
-    const total = precioUnitario * cantidad;
+      // Crear la venta
+      const venta = this.ventaRepository.create({
+        clienteId: createVentaDto.clienteId,
+        tipoPago: createVentaDto.tipoPago,
+        direccionEnvio: createVentaDto.direccionEnvio,
+        notas: createVentaDto.notas,
+        estado: EstadoVenta.PENDIENTE,
+        total: 0,
+      });
 
-    // Crear la venta
-    const venta = this.ventaRepository.create({
-      cliente,
-      barbero: barbero || undefined,
-      producto,
-      cantidad,
-      precioUnitario,
-      total,
-      tipoPago,
-      notas,
-    });
+      const ventaGuardada = await queryRunner.manager.save(venta);
 
-    const ventaGuardada = await this.ventaRepository.save(venta);
+      let totalVenta = 0;
+      const detalles: DetalleVenta[] = [];
 
-    // Actualizar stock del producto
-    producto.stock -= cantidad;
-    // Si había unidades publicadas, reducir tambien la cantidad publicada (representa unidades disponibles para venta)
-    if (producto.cantidad_publicada && producto.cantidad_publicada > 0) {
-      producto.cantidad_publicada = Math.max(0, producto.cantidad_publicada - cantidad);
-      producto.publicado = producto.cantidad_publicada > 0;
-    }
+      // Procesar cada item
+      for (const item of createVentaDto.items) {
+        const producto = await queryRunner.manager.findOne(Producto, {
+          where: { id: item.productoId }
+        });
 
-    await this.productoRepository.save(producto);
-
-    return {
-      success: true,
-      mensaje: 'Venta registrada exitosamente',
-      venta: ventaGuardada,
-    };
-  }
-
-  async createBulk(createVentasDto: CreateVentaDto[]) {
-    if (!createVentasDto || createVentasDto.length === 0) {
-      throw new BadRequestException('No se enviaron productos para la venta');
-    }
-
-    const ventasGuardadas: Venta[] = [];
-    const errors: string[] = [];
-
-    // Validar cliente para la primera venta (asumimos que todas son del mismo cliente)
-    const firstSale = createVentasDto[0];
-    const cliente = await this.userRepository.findOne({ where: { id: firstSale.clienteId } });
-    if (!cliente) {
-       throw new NotFoundException(`Cliente con ID ${firstSale.clienteId} no encontrado`);
-    }
-
-    // Procesar cada item
-    for (const item of createVentasDto) {
-        try {
-            const producto = await this.productoRepository.findOne({ where: { id: item.productoId } });
-            if (!producto) {
-                errors.push(`Producto ID ${item.productoId} no encontrado`);
-                continue;
-            }
-
-            if (producto.stock < item.cantidad) {
-                 errors.push(`Stock insuficiente para ${producto.nombre}`);
-                 continue;
-            }
-
-            let barbero: User | undefined = undefined;
-            if (item.barberoId) {
-               barbero = await this.userRepository.findOne({ where: { id: item.barberoId } }) || undefined;
-            }
-
-            const precioUnitario = parseFloat(producto.precio_venta.toString());
-            const total = precioUnitario * item.cantidad;
-
-            const venta = this.ventaRepository.create({
-                cliente,
-                barbero,
-                producto,
-                cantidad: item.cantidad,
-                precioUnitario,
-                total,
-                tipoPago: item.tipoPago,
-                notas: item.notas
-            });
-
-            const savedVenta = await this.ventaRepository.save(venta);
-            
-            // Update Stock
-            producto.stock -= item.cantidad;
-            await this.productoRepository.save(producto);
-
-            ventasGuardadas.push(savedVenta);
-
-        } catch (error) {
-            console.error('Error processing item:', error);
-            errors.push(`Error al procesar producto ID ${item.productoId}`);
+        if (!producto) {
+          throw new NotFoundException(`Producto con ID ${item.productoId} no encontrado`);
         }
-    }
 
-    if (ventasGuardadas.length === 0 && errors.length > 0) {
-        throw new BadRequestException(`Fallo al procesar la venta: ${errors.join(', ')}`);
-    }
+        // Verificar stock disponible
+        if (producto.stock < item.cantidad) {
+          throw new BadRequestException(
+            `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock}, Solicitado: ${item.cantidad}`
+          );
+        }
 
-    return {
-        success: true,
-        mensaje: 'Orden procesada',
-        ventas: ventasGuardadas,
-        errors: errors.length > 0 ? errors : undefined
-    };
+        // Calcular subtotal
+        const precioUnitario = producto.precio_venta;
+        const subtotal = precioUnitario * item.cantidad;
+        totalVenta += subtotal;
+
+        // Crear detalle de venta
+        const detalle = this.detalleVentaRepository.create({
+          ventaId: ventaGuardada.id,
+          productoId: producto.id,
+          cantidad: item.cantidad,
+          precioUnitario,
+          subtotal,
+        });
+
+        detalles.push(detalle);
+
+        // Descontar stock
+        producto.stock -= item.cantidad;
+        await queryRunner.manager.save(producto);
+      }
+
+      // Guardar detalles
+      await queryRunner.manager.save(detalles);
+
+      // Actualizar total de la venta
+      ventaGuardada.total = totalVenta;
+      await queryRunner.manager.save(ventaGuardada);
+
+      await queryRunner.commitTransaction();
+
+      // Crear notificación para admins y superadmins
+      await this.notificationService.crearNotificacionNuevaVenta(
+        ventaGuardada.id,
+        `${cliente.nombre} ${cliente.apellido}`
+      );
+
+      // Retornar venta completa con relaciones
+      return await this.ventaRepository.findOne({
+        where: { id: ventaGuardada.id },
+        relations: ['detalles', 'detalles.producto', 'cliente']
+      });
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async findAll() {
     return await this.ventaRepository.find({
-      relations: ['cliente', 'barbero', 'producto'],
-      order: { fechaVenta: 'DESC' },
+      relations: ['detalles', 'detalles.producto', 'cliente'],
+      order: { fechaVenta: 'DESC' }
     });
   }
 
   async findOne(id: number) {
     const venta = await this.ventaRepository.findOne({
       where: { id },
-      relations: ['cliente', 'barbero', 'producto'],
+      relations: ['detalles', 'detalles.producto', 'cliente']
     });
 
     if (!venta) {
@@ -182,81 +143,185 @@ export class VentaService {
 
   async findByCliente(clienteId: number) {
     return await this.ventaRepository.find({
-      where: { cliente: { id: clienteId } },
-      relations: ['cliente', 'barbero', 'producto'],
-      order: { fechaVenta: 'DESC' },
+      where: { clienteId },
+      relations: ['detalles', 'detalles.producto'],
+      order: { fechaVenta: 'DESC' }
     });
   }
 
-  async findByBarbero(barberoId: number) {
-    return await this.ventaRepository.find({
-      where: { barbero: { id: barberoId } },
-      relations: ['cliente', 'barbero', 'producto'],
-      order: { fechaVenta: 'DESC' },
-    });
-  }
+  async update(id: number, updateVentaDto: UpdateVentaDto, userId: number, userRole: Role) {
+    const venta = await this.findOne(id);
 
-  async getEstadisticas(fechaInicio?: Date, fechaFin?: Date) {
-    let ventas: Venta[];
-
-    const whereClause: any = {};
-    if (fechaInicio && fechaFin) {
-        whereClause.fechaVenta = Between(fechaInicio, fechaFin);
+    // Solo admins y superadmins pueden cambiar el estado
+    if (userRole !== Role.ADMINISTRADOR && userRole !== Role.SUPERADMIN) {
+      throw new ForbiddenException('No tienes permisos para actualizar esta venta');
     }
 
-    ventas = await this.ventaRepository.find({
-        where: whereClause,
-        relations: ['producto', 'cliente', 'barbero'],
-        order: { fechaVenta: 'DESC' }
+    if (updateVentaDto.estado && updateVentaDto.estado !== venta.estado) {
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      try {
+        // Si se cancela la venta y no estaba cancelada, devolver stock
+        if (updateVentaDto.estado === EstadoVenta.CANCELADA && venta.estado !== EstadoVenta.CANCELADA) {
+          for (const detalle of venta.detalles) {
+            const producto = await queryRunner.manager.findOne(Producto, {
+              where: { id: detalle.productoId }
+            });
+
+            if (producto) {
+              producto.stock += detalle.cantidad;
+              await queryRunner.manager.save(producto);
+            }
+          }
+        }
+
+        venta.estado = updateVentaDto.estado;
+        // Usar manager del queryRunner para guardar
+        await queryRunner.manager.save(venta);
+        await queryRunner.commitTransaction();
+
+        // Notificar al cliente del cambio de estado
+        await this.notificationService.crearNotificacionCambioEstado(
+          venta.id,
+          venta.clienteId,
+          updateVentaDto.estado
+        );
+
+      } catch (error) {
+        await queryRunner.rollbackTransaction();
+        throw error;
+      } finally {
+        await queryRunner.release();
+      }
+    }
+
+    return await this.findOne(id);
+  }
+
+  async cancelar(id: number, userId: number, userRole: Role) {
+    const venta = await this.findOne(id);
+
+    // Solo el cliente puede cancelar su propia venta
+    if (userRole === Role.CLIENTE && venta.clienteId !== userId) {
+      throw new ForbiddenException('No puedes cancelar esta venta');
+    }
+
+    // Solo se puede cancelar si está en estado PENDIENTE
+    if (venta.estado !== EstadoVenta.PENDIENTE) {
+      throw new BadRequestException('Solo se pueden cancelar ventas en estado PENDIENTE');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Devolver stock a los productos
+      for (const detalle of venta.detalles) {
+        const producto = await queryRunner.manager.findOne(Producto, {
+          where: { id: detalle.productoId }
+        });
+
+        if (producto) {
+          producto.stock += detalle.cantidad;
+          await queryRunner.manager.save(producto);
+        }
+      }
+
+      // Cambiar estado a CANCELADA
+      venta.estado = EstadoVenta.CANCELADA;
+      await queryRunner.manager.save(venta);
+
+      await queryRunner.commitTransaction();
+
+      // Notificar a admins
+      await this.notificationService.crearNotificacionVentaCancelada(
+        venta.id,
+        `${venta.cliente.nombre} ${venta.cliente.apellido}`
+      );
+
+      return await this.findOne(id);
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // Estadísticas
+  async obtenerEstadisticas(fechaInicio?: Date, fechaFin?: Date) {
+    const whereCondition: any = {};
+
+    if (fechaInicio && fechaFin) {
+      whereCondition.fechaVenta = Between(fechaInicio, fechaFin);
+    }
+
+    const ventas = await this.ventaRepository.find({
+      where: whereCondition,
+      relations: ['detalles', 'detalles.producto']
     });
 
     const totalVentas = ventas.length;
-    const ingresoTotal = ventas.reduce((sum, venta) => sum + parseFloat(venta.total.toString()), 0);
-    const ventasPorTipoPago = ventas.reduce((acc, venta) => {
-      acc[venta.tipoPago] = (acc[venta.tipoPago] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const totalIngresos = ventas
+      .filter(v => v.estado !== EstadoVenta.CANCELADA)
+      .reduce((sum, v) => sum + Number(v.total), 0);
 
-    const productosMasVendidos = ventas.reduce((acc, venta) => {
-      // Manejar caso donde producto pueda ser null (si se eliminó, aunque no debería con integridad referencial)
-      if (venta.producto) {
-        const nombreProducto = venta.producto.nombre;
-        if (!acc[nombreProducto]) {
-            acc[nombreProducto] = { cantidad: 0, ingresos: 0 };
-        }
-        acc[nombreProducto].cantidad += venta.cantidad;
-        acc[nombreProducto].ingresos += parseFloat(venta.total.toString());
-      }
-      return acc;
-    }, {} as Record<string, { cantidad: number; ingresos: number }>);
+    const ventasPorEstado = {
+      pendientes: ventas.filter(v => v.estado === EstadoVenta.PENDIENTE).length,
+      pagadas: ventas.filter(v => v.estado === EstadoVenta.PAGADA).length,
+      entregadas: ventas.filter(v => v.estado === EstadoVenta.ENTREGADA).length,
+      canceladas: ventas.filter(v => v.estado === EstadoVenta.CANCELADA).length,
+    };
+
+    // Productos más vendidos
+    const productosVendidos = new Map<number, { nombre: string, cantidad: number, total: number }>();
+
+    ventas
+      .filter(v => v.estado !== EstadoVenta.CANCELADA)
+      .forEach(venta => {
+        venta.detalles.forEach(detalle => {
+          const existing = productosVendidos.get(detalle.productoId);
+          if (existing) {
+            existing.cantidad += detalle.cantidad;
+            existing.total += Number(detalle.subtotal);
+          } else {
+            productosVendidos.set(detalle.productoId, {
+              nombre: detalle.producto.nombre,
+              cantidad: detalle.cantidad,
+              total: Number(detalle.subtotal)
+            });
+          }
+        });
+      });
+
+    const productosMasVendidos = Array.from(productosVendidos.values())
+      .sort((a, b) => b.cantidad - a.cantidad)
+      .slice(0, 10);
 
     return {
       totalVentas,
-      ingresoTotal: ingresoTotal.toFixed(2),
-      ventasPorTipoPago,
-      productosMasVendidos,
-      promedioVenta: totalVentas > 0 ? (ingresoTotal / totalVentas).toFixed(2) : 0,  
+      totalIngresos,
+      ventasPorEstado,
+      productosMasVendidos
     };
   }
 
-  async remove(id: number) {
-    const venta = await this.findOne(id);
+  async obtenerVentasPorDia(fecha: Date) {
+    const inicioDia = new Date(fecha);
+    inicioDia.setHours(0, 0, 0, 0);
 
-    // Devolver el stock al producto
-    const producto = await this.productoRepository.findOne({
-      where: { id: venta.producto.id }
+    const finDia = new Date(fecha);
+    finDia.setHours(23, 59, 59, 999);
+
+    return await this.ventaRepository.find({
+      where: {
+        fechaVenta: Between(inicioDia, finDia)
+      },
+      relations: ['detalles', 'detalles.producto', 'cliente']
     });
-
-    if (producto) {
-      producto.stock += venta.cantidad;
-      await this.productoRepository.save(producto);
-    }
-
-    await this.ventaRepository.remove(venta);
-
-    return {
-      success: true,
-      mensaje: `Venta con ID ${id} eliminada y stock restaurado`,
-    };
   }
 }

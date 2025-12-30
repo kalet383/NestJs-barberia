@@ -1,11 +1,27 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
+import { 
+  Entity, 
+  Column, 
+  PrimaryGeneratedColumn, 
+  ManyToOne, 
+  JoinColumn, 
+  CreateDateColumn, 
+  UpdateDateColumn,
+  OneToMany 
+} from 'typeorm';
 import { User } from 'src/auth/entities/user.entity';
-import { Producto } from 'src/producto/entities/producto.entity';
+import { DetalleVenta } from 'src/detalle-venta/entities/detalle-venta.entity';
+
+export enum EstadoVenta {
+  PENDIENTE = 'PENDIENTE',
+  PAGADA = 'PAGADA',
+  CANCELADA = 'CANCELADA',
+  ENTREGADA = 'ENTREGADA',
+}
 
 export enum TipoPago {
-  EFECTIVO = 'efectivo',
-  TARJETA = 'tarjeta',
-  TRANSFERENCIA = 'transferencia',
+  EFECTIVO = 'EFECTIVO',
+  PAGO_CONTRA_ENTREGA = 'PAGO_CONTRA_ENTREGA',
+  TRANSFERENCIA = 'TRANSFERENCIA',
 }
 
 @Entity()
@@ -13,26 +29,18 @@ export class Venta {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => User, { eager: true })
-  @JoinColumn({ name: 'Id_Cliente' })
-  cliente: User;
-
-  @ManyToOne(() => User, { eager: true, nullable: true })
-  @JoinColumn({ name: 'Id_Barbero' })
-  barbero?: User;
-
-  @ManyToOne(() => Producto, { eager: true })
-  @JoinColumn({ name: 'Id_Producto' })
-  producto: Producto;
-
-  @Column({ type: 'int' })
-  cantidad: number;
-
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
-  precioUnitario: number;
+  @CreateDateColumn()
+  fechaVenta: Date;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   total: number;
+
+  @Column({
+    type: 'enum',
+    enum: EstadoVenta,
+    default: EstadoVenta.PENDIENTE
+  })
+  estado: EstadoVenta;
 
   @Column({
     type: 'enum',
@@ -41,9 +49,28 @@ export class Venta {
   })
   tipoPago: TipoPago;
 
-  @CreateDateColumn()
-  fechaVenta: Date;
+  @Column({ type: 'text', nullable: true })
+  direccionEnvio?: string;
 
   @Column({ type: 'text', nullable: true })
   notas?: string;
+
+  @ManyToOne(() => User, { eager: true })
+  @JoinColumn({ name: 'clienteId' })
+  cliente: User;
+
+  @Column()
+  clienteId: number;
+
+  @OneToMany(() => DetalleVenta, detalle => detalle.venta, { 
+    cascade: true,
+    eager: true 
+  })
+  detalles: DetalleVenta[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

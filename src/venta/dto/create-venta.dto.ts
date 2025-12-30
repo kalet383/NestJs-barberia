@@ -1,27 +1,26 @@
-import { IsNotEmpty, IsNumber, IsEnum, IsOptional, IsString, Min } from 'class-validator';
+import { IsNotEmpty, IsEnum, IsOptional, IsString, IsArray, ValidateNested, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 import { TipoPago } from '../entities/venta.entity';
+import { ItemVentaDto } from './item-venta.dto';
 
 export class CreateVentaDto {
   @IsNotEmpty()
   @IsNumber()
   clienteId: number;
 
-  @IsOptional()
-  @IsNumber()
-  barberoId?: number;
-
   @IsNotEmpty()
-  @IsNumber()
-  productoId: number;
-
-  @IsNotEmpty()
-  @IsNumber()
-  @Min(1)
-  cantidad: number;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ItemVentaDto)
+  items: ItemVentaDto[];
 
   @IsNotEmpty()
   @IsEnum(TipoPago)
   tipoPago: TipoPago;
+
+  @IsOptional()
+  @IsString()
+  direccionEnvio?: string;
 
   @IsOptional()
   @IsString()

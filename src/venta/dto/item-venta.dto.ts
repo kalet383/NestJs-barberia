@@ -10,4 +10,3 @@ export class ItemVentaDto {
   @Min(1)
   cantidad: number;
 }
-

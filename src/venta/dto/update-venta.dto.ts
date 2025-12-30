@@ -1,4 +1,8 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateVentaDto } from './create-venta.dto';
+import { IsEnum, IsOptional } from 'class-validator';
+import { EstadoVenta } from '../entities/venta.entity';
 
-export class UpdateVentaDto extends PartialType(CreateVentaDto) {}
+export class UpdateVentaDto {
+  @IsOptional()
+  @IsEnum(EstadoVenta)
+  estado?: EstadoVenta;
+}
