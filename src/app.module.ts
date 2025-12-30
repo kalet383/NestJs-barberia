@@ -14,6 +14,7 @@ import { CompraProductoModule } from './compra-producto/compra-producto.module';
 import { DetalleCompraModule } from './detalle-compra/detalle-compra.module';
 import { CategoriaServicioModule } from './categoria-servicio/categoria-servicio.module';
 import { VentaModule } from './venta/venta.module';
+import { DetalleVentaModule } from './detalle-venta/detalle-venta.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { VentaModule } from './venta/venta.module';
     DetalleCompraModule,
     CategoriaServicioModule,
     VentaModule,
+    DetalleVentaModule,
   ],
 })
 export class AppModule {}

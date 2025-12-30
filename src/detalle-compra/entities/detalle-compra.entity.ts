@@ -19,8 +19,8 @@ export class DetalleCompra {
     cantidad: number;
 
     @Column({ type: 'decimal', precision: 10, scale: 2 })
-    precio_unitario: number;
+    precio_compra: number;
 
     @Column({ type: 'decimal', precision: 10, scale: 2 })
-    total: number;
+    subtotal: number;
 }

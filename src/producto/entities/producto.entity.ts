@@ -14,13 +14,20 @@ export class Producto {
     descripcion: string;
 
     @Column('decimal', { precision: 10, scale: 2 })
-    precio: number;
+    precio_venta: number;
 
-    @Column('int')
+    @Column('int', { default: 0 })
     stock: number;
 
-    @Column({ length: 255 })
+    @Column('text', { nullable: true })
     imagenUrl: string;
+
+    @Column({ default: false })
+    publicado: boolean;
+
+    // Cantidad disponible en la tienda para este producto (publicada por Admin/SuperAdmin)
+    @Column('int', { default: 0 })
+    cantidad_publicada: number;
 
     @ManyToOne(() => CategoriaProducto, (categoria: CategoriaProducto) => categoria.productos, { eager: true })
     @JoinColumn({ name: 'categoriaId' })
@@ -31,4 +38,4 @@ export class Producto {
 
     @Column()
     categoriaId: number;
-}
+} 

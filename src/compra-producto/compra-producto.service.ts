@@ -44,8 +44,8 @@ export class CompraProductoService {
     let totalCompra = 0;
 
     // Crear los detalles de la compra
-    for (const detalle of detalles) {
-      const { id_producto, cantidad } = detalle;
+    for (const detalle of (detalles || [])) {
+      const { id_producto, cantidad, precio_compra } = detalle;
 
       // Verificar que el producto existe
       const producto = await this.productoRepository.findOne({ where: { id: id_producto } });
@@ -53,19 +53,25 @@ export class CompraProductoService {
         throw new Error(`Producto con ID ${id_producto} no encontrado`);
       }
 
-      const subtotal = cantidad * producto.precio;
+      // Usar precio_compra enviado o precio_venta del producto como referencia
+      const precio = precio_compra ?? Number(producto.precio_venta);
+      const subtotal = Number(cantidad) * Number(precio);
       totalCompra += subtotal;
 
       const detalleData = {
         compra,
-        precio_unitario: producto.precio,
-        subtotal,
+        precio_compra: precio,
+        subtotal: subtotal,
         producto,
         cantidad,
       } as any;
 
       const detalleCompra = this.detalleRepository.create(detalleData);
       await this.detalleRepository.save(detalleCompra);
+
+      // Actualizar stock del producto
+      producto.stock = Number(producto.stock) + Number(cantidad);
+      await this.productoRepository.save(producto);
     }
 
     // actualizar el total de la compra y guardarlo
@@ -75,19 +81,28 @@ export class CompraProductoService {
     return compra;
   }
 
-  findAll() {
-    return `This action returns all compraProducto`;
+  async findAll() {
+    return await this.compraRepository.find({ order: { fecha_compra: 'DESC' } });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} compraProducto`;
+  async findOne(id: number) {
+    const compra = await this.compraRepository.findOne({ where: { id_compra: id }, relations: ['detalles'] });
+    if (!compra) {
+      throw new NotFoundException(`Compra con ID ${id} no encontrada`);
+    }
+    return compra;
   }
 
-  update(id: number, updateCompraProductoDto: UpdateCompraProductoDto) {
-    return `This action updates a #${id} compraProducto`;
+  async update(id: number, updateCompraProductoDto: UpdateCompraProductoDto) {
+    await this.compraRepository.update(id, updateCompraProductoDto as any);
+    return this.findOne(id);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} compraProducto`;
+  async remove(id: number) {
+    // En lugar de eliminar físicamente, marcamos la compra como inactiva para conservar el historial
+    const compra = await this.findOne(id);
+    compra.activo = false;
+    await this.compraRepository.save(compra);
+    return { success: true, mensaje: 'Compra marcada como eliminada. Historial conservado.' };
   }
 }

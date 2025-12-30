@@ -6,6 +6,7 @@ import { User } from './entities/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { AdminGuard } from './guards/admin.guard';
 import { HorarioBarbero } from 'src/horario-barbero/entities/horario-barbero.entity';
 import { FranjaHoraria } from 'src/franja-horaria/entities/franja-horaria.entity';
 
@@ -23,7 +24,7 @@ import { FranjaHoraria } from 'src/franja-horaria/entities/franja-horaria.entity
     ConfigModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, AdminGuard],
   exports: [AuthService],
 })
 export class AuthModule {}

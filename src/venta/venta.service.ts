@@ -51,8 +51,8 @@ export class VentaService {
       barbero = barberoFound;
     }
 
-    // Calcular total
-    const precioUnitario = parseFloat(producto.precio.toString());
+    // Calcular total (usar precio_venta)
+    const precioUnitario = parseFloat(producto.precio_venta.toString());
     const total = precioUnitario * cantidad;
 
     // Crear la venta
@@ -71,6 +71,12 @@ export class VentaService {
 
     // Actualizar stock del producto
     producto.stock -= cantidad;
+    // Si había unidades publicadas, reducir tambien la cantidad publicada (representa unidades disponibles para venta)
+    if (producto.cantidad_publicada && producto.cantidad_publicada > 0) {
+      producto.cantidad_publicada = Math.max(0, producto.cantidad_publicada - cantidad);
+      producto.publicado = producto.cantidad_publicada > 0;
+    }
+
     await this.productoRepository.save(producto);
 
     return {
@@ -114,7 +120,7 @@ export class VentaService {
                barbero = await this.userRepository.findOne({ where: { id: item.barberoId } }) || undefined;
             }
 
-            const precioUnitario = parseFloat(producto.precio.toString());
+            const precioUnitario = parseFloat(producto.precio_venta.toString());
             const total = precioUnitario * item.cantidad;
 
             const venta = this.ventaRepository.create({
