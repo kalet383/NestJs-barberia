@@ -87,8 +87,11 @@ export class VentaService {
 
         detalles.push(detalle);
 
-        // Descontar stock
+        // Descontar stock y cantidad publicada
         producto.stock -= item.cantidad;
+        producto.cantidad_publicada -= item.cantidad;
+        if (producto.cantidad_publicada < 0) producto.cantidad_publicada = 0;
+        
         await queryRunner.manager.save(producto);
       }
 
@@ -172,6 +175,7 @@ export class VentaService {
 
             if (producto) {
               producto.stock += detalle.cantidad;
+              producto.cantidad_publicada += detalle.cantidad;
               await queryRunner.manager.save(producto);
             }
           }
@@ -226,6 +230,7 @@ export class VentaService {
 
         if (producto) {
           producto.stock += detalle.cantidad;
+          producto.cantidad_publicada += detalle.cantidad;
           await queryRunner.manager.save(producto);
         }
       }
