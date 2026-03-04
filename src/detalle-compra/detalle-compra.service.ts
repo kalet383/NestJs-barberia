@@ -49,9 +49,11 @@ export class DetalleCompraService {
 
       await manager.save(detalle);
 
-      // Actualizar stock
-      producto.stock = Number(producto.stock) + Number(cantidad);
-      await manager.save(producto);
+      // Actualizar stock SOLO si la compra está completada
+      if (compra.estado === 'Completada') {
+        producto.stock = Number(producto.stock) + Number(cantidad);
+        await manager.save(producto);
+      }
 
       // Actualizar total de la compra
       compra.total = Number(compra.total || 0) + Number(subtotal);
@@ -90,7 +92,7 @@ export class DetalleCompraService {
       const producto = await manager.findOne(Producto, { where: { id: detalle.producto.id } });
       const compra = await manager.findOne(CompraProducto, { where: { id_compra: detalle.compra.id_compra } });
 
-      if (producto) {
+      if (producto && compra && compra.estado === 'Completada') {
         producto.stock = Number(producto.stock) - Number(detalle.cantidad);
         // Si la cantidad publicada excede el nuevo stock, ajustarla
         if (producto.cantidad_publicada > producto.stock) {

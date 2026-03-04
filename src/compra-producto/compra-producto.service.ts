@@ -25,7 +25,7 @@ export class CompraProductoService {
   ) {}
 
   async create(createCompraProductoDto: CreateCompraProductoDto) {
-    const { fecha_compra, id_proveedor, detalles } = createCompraProductoDto;
+    const { fecha_compra, id_proveedor, detalles, estado = 'Pendiente' } = createCompraProductoDto;
 
     // Verificar que el proveedor existe
     const proveedor = await this.proveedorRepository.findOne({ where: { id: id_proveedor } });
@@ -37,6 +37,7 @@ export class CompraProductoService {
     const compra = this.compraRepository.create({
       fecha_compra,
       proveedor,
+      estado,
       total: 0, // Se actualizará después de agregar los detalles
     });
     await this.compraRepository.save(compra);
@@ -69,9 +70,11 @@ export class CompraProductoService {
       const detalleCompra = this.detalleRepository.create(detalleData);
       await this.detalleRepository.save(detalleCompra);
 
-      // Actualizar stock del producto
-      producto.stock = Number(producto.stock) + Number(cantidad);
-      await this.productoRepository.save(producto);
+      // Actualizar stock del producto SOLO si el estado es Completada
+      if (estado === 'Completada') {
+        producto.stock = Number(producto.stock) + Number(cantidad);
+        await this.productoRepository.save(producto);
+      }
     }
 
     // actualizar el total de la compra y guardarlo
@@ -94,13 +97,54 @@ export class CompraProductoService {
   }
 
   async update(id: number, updateCompraProductoDto: UpdateCompraProductoDto) {
+    const compra = await this.findOne(id);
+    const estadoAnterior = compra.estado;
+    const nuevoEstado = updateCompraProductoDto.estado;
+
     await this.compraRepository.update(id, updateCompraProductoDto as any);
+
+    if (nuevoEstado && nuevoEstado !== estadoAnterior) {
+      const compraCompleta = await this.findOne(id);
+
+      if (nuevoEstado === 'Completada') {
+        // Increment stock
+        for (const detalle of compraCompleta.detalles) {
+          const producto = await this.productoRepository.findOne({ where: { id: detalle.producto.id } });
+          if (producto) {
+            producto.stock = Number(producto.stock) + Number(detalle.cantidad);
+            await this.productoRepository.save(producto);
+          }
+        }
+      } else if (estadoAnterior === 'Completada' && (nuevoEstado === 'Pendiente' || nuevoEstado === 'Cancelada')) {
+        // Revert stock increment
+        for (const detalle of compraCompleta.detalles) {
+          const producto = await this.productoRepository.findOne({ where: { id: detalle.producto.id } });
+          if (producto) {
+            producto.stock = Math.max(0, Number(producto.stock) - Number(detalle.cantidad));
+            await this.productoRepository.save(producto);
+          }
+        }
+      }
+    }
+
     return this.findOne(id);
   }
 
   async remove(id: number) {
     // En lugar de eliminar físicamente, marcamos la compra como inactiva para conservar el historial
     const compra = await this.findOne(id);
+    
+    // Si se elimina una compra completada, revertir su impacto en stock
+    if (compra.estado === 'Completada' && compra.activo) {
+      for (const detalle of compra.detalles) {
+        const producto = await this.productoRepository.findOne({ where: { id: detalle.producto.id } });
+        if (producto) {
+          producto.stock = Math.max(0, Number(producto.stock) - Number(detalle.cantidad));
+          await this.productoRepository.save(producto);
+        }
+      }
+    }
+
     compra.activo = false;
     await this.compraRepository.save(compra);
     return { success: true, mensaje: 'Compra marcada como eliminada. Historial conservado.' };

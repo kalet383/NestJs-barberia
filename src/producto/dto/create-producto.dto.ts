@@ -19,6 +19,22 @@ export class CreateProductoDto {
     @IsBoolean()
     publicado?: boolean;
 
+    @IsOptional()
+    @IsBoolean()
+    en_oferta?: boolean;
+
+    @IsOptional()
+    @IsNumber()
+    precio_oferta?: number;
+
+    @IsOptional()
+    @IsString()
+    dias_oferta?: string;
+
+    @IsOptional()
+    @IsString()
+    informacion_oferta?: string;
+
     @IsNotEmpty()
     @IsString()
     @MaxLength(8000)

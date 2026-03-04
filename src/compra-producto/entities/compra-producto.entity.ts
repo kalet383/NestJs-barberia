@@ -20,6 +20,9 @@ export class CompraProducto {
     @Column({ type: 'decimal', precision: 10, scale: 2 })
     total: number;
 
+    @Column({ default: 'Pendiente' })
+    estado: string; // 'Pendiente' | 'Completada' | 'Cancelada'
+
     @Column({ default: true })
     activo: boolean;
 }

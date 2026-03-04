@@ -52,7 +52,7 @@ export class VentaService {
       const ventaGuardada = await queryRunner.manager.save(venta);
 
       let totalVenta = 0;
-      const detalles: DetalleVenta[] = [];
+      const detalles: any[] = [];
 
       // Procesar cada item
       for (const item of createVentaDto.items) {
@@ -71,8 +71,10 @@ export class VentaService {
           );
         }
 
-        // Calcular subtotal
-        const precioUnitario = producto.precio_venta;
+        // Calcular subtotal — usar precio de oferta si está activa
+        const tieneOferta = !!(producto.en_oferta && producto.precio_oferta && Number(producto.precio_oferta) > 0);
+        const precioUnitario = tieneOferta ? Number(producto.precio_oferta) : Number(producto.precio_venta);
+        const precioOriginal = tieneOferta ? Number(producto.precio_venta) : null;
         const subtotal = precioUnitario * item.cantidad;
         totalVenta += subtotal;
 
@@ -83,7 +85,9 @@ export class VentaService {
           cantidad: item.cantidad,
           precioUnitario,
           subtotal,
-        });
+          en_oferta: tieneOferta,
+          precio_original: precioOriginal,
+        } as any);
 
         detalles.push(detalle);
 
@@ -96,7 +100,9 @@ export class VentaService {
       }
 
       // Guardar detalles
-      await queryRunner.manager.save(detalles);
+      for (const detalle of detalles) {
+        await queryRunner.manager.save(detalle);
+      }
 
       // Actualizar total de la venta
       ventaGuardada.total = totalVenta;
@@ -166,16 +172,52 @@ export class VentaService {
       await queryRunner.startTransaction();
 
       try {
-        // Si se cancela la venta y no estaba cancelada, devolver stock
-        if (updateVentaDto.estado === EstadoVenta.CANCELADA && venta.estado !== EstadoVenta.CANCELADA) {
+        // ╔══════════════════════════════════════════════════════════════╗
+        // ║  LÓGICA SIMÉTRICA DE STOCK                                   ║
+        // ║                                                              ║
+        // ║  → CANCELADA (desde cualquier estado activo):               ║
+        // ║       Stock SUBE — devolución / cancelación                 ║
+        // ║                                                              ║
+        // ║  CANCELADA → (cualquier estado activo):                      ║
+        // ║       Stock BAJA — se reactiva la reserva                    ║
+        // ║                                                              ║
+        // ║  Estado activo → Estado activo: sin cambio en stock          ║
+        // ╚══════════════════════════════════════════════════════════════╝
+
+        const estadosActivos = [
+          EstadoVenta.PENDIENTE,
+          EstadoVenta.PAGADA,
+          EstadoVenta.ENTREGADA,
+        ];
+
+        const nuevoEstado = updateVentaDto.estado;
+        const estadoActual = venta.estado;
+
+        const esCancelacion =
+          nuevoEstado === EstadoVenta.CANCELADA &&
+          estadosActivos.includes(estadoActual);
+
+        const esReactivacion =
+          estadoActual === EstadoVenta.CANCELADA &&
+          estadosActivos.includes(nuevoEstado);
+
+        if (esCancelacion || esReactivacion) {
           for (const detalle of venta.detalles) {
             const producto = await queryRunner.manager.findOne(Producto, {
               where: { id: detalle.productoId }
             });
 
             if (producto) {
-              producto.stock += detalle.cantidad;
-              producto.cantidad_publicada += detalle.cantidad;
+              if (esCancelacion) {
+                // Devolver stock al cancelar
+                producto.stock += detalle.cantidad;
+                producto.cantidad_publicada += detalle.cantidad;
+              } else {
+                // Descontar stock al reactivar una cancelada
+                producto.stock -= detalle.cantidad;
+                producto.cantidad_publicada -= detalle.cantidad;
+                if (producto.cantidad_publicada < 0) producto.cantidad_publicada = 0;
+              }
               await queryRunner.manager.save(producto);
             }
           }

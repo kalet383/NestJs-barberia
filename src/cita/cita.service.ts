@@ -4,7 +4,7 @@ import { UpdateCitaDto } from './dto/update-cita.dto';
 import { UpdateEstadoCitaDto } from './dto/update-estado-cita.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Servicio } from 'src/servicio/entities/servicio.entity';
-import { Repository } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import { DiaSemana, HorarioBarbero } from 'src/horario-barbero/entities/horario-barbero.entity';
 import { HorarioBarberoService } from 'src/horario-barbero/horario-barbero.service';
 import { Cita, EstadoCita } from './entities/cita.entity';
@@ -443,6 +443,52 @@ export class CitaService {
       console.error('Error al obtener horas ocupadas:', error);
       throw new BadRequestException('Error al consultar disponibilidad del barbero');
     }
+  }
+
+  async obtenerEstadisticas(fechaInicio?: Date, fechaFin?: Date) {
+    const whereCondition: any = {};
+    if (fechaInicio && fechaFin) {
+      whereCondition.fecha = Between(fechaInicio, fechaFin);
+    }
+
+    const citas = await this.citaRepository.find({
+      where: whereCondition,
+      relations: ['servicio']
+    });
+
+    const totalCitas = citas.length;
+
+    const citasPorEstado = {
+      pendientes: citas.filter(c => c.estado === EstadoCita.AGENDADA).length,
+      completadas: citas.filter(c => c.estado === EstadoCita.COMPLETADA).length,
+      canceladas: citas.filter(c => c.estado === EstadoCita.CANCELADA).length,
+    };
+
+    const serviciosCount = new Map<number, { nombre: string, cantidad: number }>();
+    citas.forEach(cita => {
+      if (cita.servicio) {
+        // Asume que la entidad Servicio tiene una propiedad "id"
+        const existing = serviciosCount.get((cita.servicio as any).id || (cita.servicio as any).id_servicio);
+        if (existing) {
+          existing.cantidad++;
+        } else {
+          serviciosCount.set((cita.servicio as any).id || (cita.servicio as any).id_servicio, {
+            nombre: cita.servicio.nombre,
+            cantidad: 1
+          });
+        }
+      }
+    });
+
+    const serviciosMasSolicitados = Array.from(serviciosCount.values())
+      .sort((a, b) => b.cantidad - a.cantidad)
+      .slice(0, 10);
+
+    return {
+      totalCitas,
+      citasPorEstado,
+      serviciosMasSolicitados
+    };
   }
 
   async findAll() {

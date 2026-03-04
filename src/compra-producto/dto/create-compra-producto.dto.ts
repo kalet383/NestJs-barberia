@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import { ValidateNested, IsArray, IsDateString, IsNumber, IsNotEmpty } from 'class-validator';
 import { CreateDetalleCompraDto } from '../../detalle-compra/dto/create-detalle-compra.dto';
+import { IsOptional, IsString } from 'class-validator';
 
 export class CreateCompraProductoDto {
 
@@ -15,4 +16,8 @@ export class CreateCompraProductoDto {
     @ValidateNested({ each: true })
     @Type(() => CreateDetalleCompraDto)
     detalles: CreateDetalleCompraDto[]; // Array con los productos comprados
+
+    @IsOptional()
+    @IsString()
+    estado?: string; // 'Pendiente' | 'Completada' | 'Cancelada'
 }

@@ -35,4 +35,10 @@ export class DetalleVenta {
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   subtotal: number;
+
+  @Column({ default: false })
+  en_oferta: boolean;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  precio_original: number;
 }

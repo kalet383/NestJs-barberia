@@ -25,6 +25,18 @@ export class Producto {
     @Column({ default: false })
     publicado: boolean;
 
+    @Column({ default: false })
+    en_oferta: boolean;
+
+    @Column('decimal', { precision: 10, scale: 2, nullable: true })
+    precio_oferta: number;
+
+    @Column('text', { nullable: true })
+    dias_oferta: string;
+
+    @Column('text', { nullable: true })
+    informacion_oferta: string;
+
     // Cantidad disponible en la tienda para este producto (publicada por Admin/SuperAdmin)
     @Column('int', { default: 0 })
     cantidad_publicada: number;

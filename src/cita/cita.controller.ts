@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { CitaService } from './cita.service';
 import { CreateCitaDto } from './dto/create-cita.dto';
 import { UpdateCitaDto } from './dto/update-cita.dto';
@@ -17,6 +17,22 @@ export class CitaController {
   @Get()
   findAll() {
     return this.citaService.findAll();
+  }
+
+  @Get('estadisticas')
+  async obtenerEstadisticas(
+    @Query('inicio') inicio?: string,
+    @Query('fin') fin?: string,
+  ) {
+    const fechaInicio = inicio ? new Date(inicio) : undefined;
+    let fechaFin = fin ? new Date(fin) : undefined;
+    
+    // Si hay fecha final, ajustarla para cubrir todo el día (23:59:59)
+    if (fechaFin) {
+      fechaFin.setHours(23, 59, 59, 999);
+    }
+
+    return await this.citaService.obtenerEstadisticas(fechaInicio, fechaFin);
   }
 
   // ✅ Rutas específicas primero
