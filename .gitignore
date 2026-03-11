@@ -46,6 +46,12 @@ lerna-debug.log*
 .temp
 .tmp
 
+# Public files (ignored but keep folder structure)
+public/videos/*
+public/imagenes/*
+!public/videos/.gitkeep
+!public/imagenes/.gitkeep
+
 # Runtime data
 pids
 *.pid

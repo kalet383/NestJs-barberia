@@ -22,6 +22,18 @@ export class Servicio {
     @Column({ nullable: true })
     categoriaId: number;
 
+    @Column({ default: false })
+    publicado: boolean;
+
+    @Column({ default: false })
+    destacado: boolean;
+
+    @Column({ type: 'longtext', nullable: true })
+    imagenUrl: string | null;
+
+    @Column({ type: 'longtext', nullable: true })
+    videoUrl: string | null;
+
     // ✅ DESPUÉS la relación
     @ManyToOne(() => CategoriaServicio, (categoria: CategoriaServicio) => categoria.servicios, { 
         eager: true,

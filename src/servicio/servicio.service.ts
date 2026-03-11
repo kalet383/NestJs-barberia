@@ -13,11 +13,10 @@ export class ServicioService {
   ) {}
 
   async create(createServicioDto: CreateServicioDto): Promise<Servicio> {
-    const dto = {
+    const nuevoServicio = this.servicioRepository.create({
       ...createServicioDto,
-      duracionAprox: createServicioDto.duracionAprox, // keep as string
-    };
-    const nuevoServicio = this.servicioRepository.create(dto);
+      publicado: createServicioDto.publicado ?? false,
+    });
     return await this.servicioRepository.save(nuevoServicio);
   }
 
@@ -39,13 +38,21 @@ export class ServicioService {
     return servicio
   }
 
-  /* update(id: number, updateServicioDto: UpdateServicioDto) {
-    return `This action updates a #${id} servicio`;
-  } */
+  async update(id: number, updateServicioDto: UpdateServicioDto): Promise<Servicio> {
+    const servicio = await this.findOne(id);
+    Object.assign(servicio, updateServicioDto);
+    return await this.servicioRepository.save(servicio);
+  }
 
   async remove(id: number) {
     const servicio = await this.findOne(id);
     await this.servicioRepository.remove(servicio)
     return `Servicio con id ${id} eliminado correctamente`;
+  }
+
+  async updateVideoUrl(id: number, videoUrl: string): Promise<Servicio> {
+    const servicio = await this.findOne(id);
+    servicio.videoUrl = videoUrl;
+    return await this.servicioRepository.save(servicio);
   }
 }

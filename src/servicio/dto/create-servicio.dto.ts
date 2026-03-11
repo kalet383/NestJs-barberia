@@ -1,5 +1,5 @@
-import { IsString, IsNotEmpty, IsNumber, Min, MaxLength, Matches } from 'class-validator';
-
+import { IsString, IsNotEmpty, IsNumber, Min, MaxLength, Matches, IsOptional, IsBoolean } from 'class-validator';
+import { Transform } from 'class-transformer';
 export class CreateServicioDto {
     @IsString()
     @IsNotEmpty()
@@ -23,4 +23,20 @@ export class CreateServicioDto {
     @IsNotEmpty()
     @IsNumber()
     categoriaId: number;
+
+    @IsOptional()
+    @IsBoolean()
+    publicado?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    destacado?: boolean;
+
+    @IsOptional()
+    @Transform(({ value }) => value === null || value === '' ? null : value)
+    imagenUrl?: string | null;
+
+    @IsOptional()
+    @Transform(({ value }) => value === null || value === '' ? null : value)
+    videoUrl?: string | null;
 }

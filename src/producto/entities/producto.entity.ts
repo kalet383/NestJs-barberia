@@ -19,7 +19,7 @@ export class Producto {
     @Column('int', { default: 0 })
     stock: number;
 
-    @Column('text', { nullable: true })
+    @Column({ type: 'longtext', nullable: true })
     imagenUrl: string;
 
     @Column({ default: false })
