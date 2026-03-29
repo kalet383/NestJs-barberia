@@ -48,6 +48,28 @@ export class AuthController {
     });
   }
 
+  @Post('google')
+  async loginWithGoogle(@Body('token') idToken: string, @Res() res: Response) {
+    if (!idToken) {
+      return res.status(400).json({ message: 'Token de Google no proporcionado' });
+    }
+
+    const token = await this.authService.loginWithGoogle(idToken);
+
+    // Guardamos el token en una cookie httpOnly igual que el login tradicional
+    res.cookie('jwt', token.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', 
+      sameSite: 'strict',
+      maxAge: 1000 * 60 * 60, // 1 hora
+    });
+
+    return res.json({
+      message: 'Login interactivo de Google exitoso',
+      user: token.user
+    });
+  }
+
   @Post('logout')
   logout(@Res({ passthrough: true }) res: Response) {
     // 🎯 Limpiar la cookie JWT completamente

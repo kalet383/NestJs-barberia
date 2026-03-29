@@ -9,6 +9,8 @@ import { DiaSemana, HorarioBarbero } from 'src/horario-barbero/entities/horario-
 import { HorarioBarberoService } from 'src/horario-barbero/horario-barbero.service';
 import { Cita, EstadoCita } from './entities/cita.entity';
 import { Duration } from 'luxon';
+import { NotificationService } from 'src/notification/notification.service';
+
 @Injectable()
 export class CitaService {
   constructor(
@@ -19,6 +21,7 @@ export class CitaService {
     private readonly citaRepository: Repository<Cita>,
 
     private readonly horarioBarberoService: HorarioBarberoService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(createCitaDto: CreateCitaDto) {
@@ -108,7 +111,24 @@ export class CitaService {
     horaActual = horaFin;
   }
 
-  // ✅ Retornar todas las citas creadas
+  // Notificar al barbero y admins de cada cita creada
+  if (citasCreadas.length > 0) {
+    const primeraCita = citasCreadas[0];
+    const clienteNombre = `${(cliente as any).nombre} ${(cliente as any).apellido || ''}`.trim();
+    for (const cita of citasCreadas) {
+      try {
+        await this.notificationService.crearNotificacionNuevaCita(
+          cita.id_cita,
+          clienteNombre,
+          barberoId
+        );
+      } catch (e) {
+        console.warn('No se pudo crear notificación de cita:', e.message);
+      }
+    }
+  }
+
+  // Retornar todas las citas creadas
   return {
     disponible: true,
     mensaje: `${citasCreadas.length} cita(s) agendada(s) exitosamente`,
@@ -208,20 +228,22 @@ export class CitaService {
   }
 
   sumTimes(timeStrings: string[]): string {
-    let totalDuration = Duration.fromObject({ hours: 0, minutes: 0, seconds: 0 });
+    let totalMinutes = 0;
 
     for (const time of timeStrings) {
-      const [hours, minutes, seconds] = time.split(':').map(Number);
-      const duration = Duration.fromObject({ hours, minutes, seconds });
-      totalDuration = totalDuration.plus(duration);
+      if (!time) continue;
+      const parts = time.split(':').map(Number);
+      const h = parts[0] || 0;
+      const m = parts[1] || 0;
+      const s = parts[2] || 0;
+      totalMinutes += h * 60 + m + s / 60;
     }
 
-    // Formatea el resultado como hh:mm:ss
-    const hours = Math.floor(totalDuration.as('hours'));
-    const minutes = totalDuration.minutes % 60;
-    const seconds = totalDuration.seconds % 60;
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = Math.floor(totalMinutes % 60);
+    const secs = Math.round((totalMinutes % 1) * 60);
 
-    return `${hours}:${minutes}:${seconds}`;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 
   /**
@@ -243,6 +265,7 @@ export class CitaService {
       .innerJoinAndSelect('cita.servicio', 'servicio')
       .where('cita.Id_RolBarbero = :idBarbero', { idBarbero })
       .andWhere('cita.fecha = :fecha', { fecha })
+      .andWhere('cita.estado != :estadoCancelado', { estadoCancelado: EstadoCita.CANCELADA })
       .getMany();
 
     // Verificar si alguna cita existente se solapa con el nuevo rango
@@ -319,8 +342,10 @@ export class CitaService {
    * @param fecha - Fecha en formato YYYY-MM-DD
    * @returns Día de la semana como enum DiaSemana
    */
-  private extraerDiaSemanaDelaFecha(fecha: Date): DiaSemana {
-    const fechaObj = new Date(fecha + 'T00:00:00'); // Agregar tiempo para evitar problemas de zona horaria
+  private extraerDiaSemanaDelaFecha(fecha: any): DiaSemana {
+    // Si es un objeto Date, convertirlo a string YYYY-MM-DD para evitar desfases de zona horaria
+    const fechaStr = fecha instanceof Date ? fecha.toISOString().split('T')[0] : String(fecha);
+    const fechaObj = new Date(fechaStr + 'T00:00:00'); 
     const numeroDia = fechaObj.getDay(); // 0 = Domingo, 1 = Lunes, etc.
     
     const mapeosDias: Record<number, DiaSemana> = {
@@ -369,6 +394,24 @@ export class CitaService {
     // Actualizar el estado
     cita.estado = updateEstadoDto.estado;
     const citaActualizada = await this.citaRepository.save(cita);
+
+    // Notificar cambio de estado (si tiene cliente y barbero cargados)
+    try {
+      const clienteId = (citaActualizada as any).clienteId || (citaActualizada.cliente as any)?.id;
+      const barberoId = (citaActualizada as any).barberoId || (citaActualizada.barbero as any)?.id;
+      
+      if (clienteId && barberoId) {
+        if (updateEstadoDto.estado === EstadoCita.CANCELADA) {
+          const cliente = citaActualizada.cliente as any;
+          const clienteNombre = cliente ? `${cliente.nombre} ${cliente.apellido || ''}`.trim() : 'Cliente';
+          await this.notificationService.crearNotificacionCitaCancelada(id, clienteNombre, barberoId);
+        } else {
+          await this.notificationService.crearNotificacionCambioCita(id, clienteId, barberoId, updateEstadoDto.estado);
+        }
+      }
+    } catch (e) {
+      console.warn('No se pudo crear notificación de cambio de cita:', e.message);
+    }
 
     return {
       success: true,

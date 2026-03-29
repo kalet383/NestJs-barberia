@@ -27,12 +27,12 @@ async function bootstrap() {
   //   new ClassSerializerInterceptor(app.get(Reflector))
   // );
 
-  // Habilitar CORS para el frontend (Vite: 5173, Vue CLI: 8080)
+  // Habilitar CORS para pruebas desde otros dispositivos (celular)
   app.enableCors({
-    origin: ['http://localhost:5173', 'http://localhost:8080'],
+    origin: true, // Permite cualquier origen en desarrollo
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
   await app.listen(process.env.PORT ?? 3000);
 }

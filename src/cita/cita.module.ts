@@ -7,9 +7,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Servicio } from 'src/servicio/entities/servicio.entity';
 import { HorarioBarbero } from 'src/horario-barbero/entities/horario-barbero.entity';
 import { HorarioBarberoModule } from 'src/horario-barbero/horario-barbero.module';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
-  imports: [HorarioBarberoModule, TypeOrmModule.forFeature([Cita, Servicio, HorarioBarbero, ])],
+  imports: [HorarioBarberoModule, NotificationModule, TypeOrmModule.forFeature([Cita, Servicio, HorarioBarbero])],
   controllers: [CitaController],
   providers: [CitaService],
 })

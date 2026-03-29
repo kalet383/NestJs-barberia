@@ -33,6 +33,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "cookie-parser": "^1.4.7",
+    "firebase-admin": "^13.7.0",
     "luxon": "^3.7.1",
     "multer": "^2.1.1",
     "mysql2": "^3.14.1",

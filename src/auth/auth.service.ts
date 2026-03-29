@@ -8,6 +8,14 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { HorarioBarbero } from 'src/horario-barbero/entities/horario-barbero.entity';
 import { FranjaHoraria } from 'src/franja-horaria/entities/franja-horaria.entity';
+import * as admin from 'firebase-admin';
+
+// Inicializar Firebase Admin si no está inicializado ya
+if (admin.apps.length === 0) {
+  admin.initializeApp({
+    projectId: 'barberiaweb-d116e',
+  });
+}
 
 export class CreateBarberWithScheduleDto {
   nombre: string;
@@ -174,8 +182,68 @@ export class AuthService {
         nombre: user.nombre,
         apellido: user.apellido,
         Role: user.role,
+        foto: user.foto,
       },
     };
+  }
+
+  async loginWithGoogle(idToken: string): Promise<{ accessToken: string; user: any }> {
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const email = decodedToken.email;
+      const nombre = decodedToken.name?.split(' ')[0] || 'Usuario';
+      const apellido = decodedToken.name?.split(' ').slice(1).join(' ') || '';
+      const foto = decodedToken.picture || undefined;
+
+      if (!email) {
+        throw new BadRequestException('El token de Google no contiene correo válido');
+      }
+
+      let user = await this.usersRepository.findOne({ where: { email } });
+
+      if (!user) {
+        // Seamless Auth: Create new user if not exists
+        const randomPassword = Math.random().toString(36).slice(-10) + 'A1!';
+        const hashedPassword = await bcrypt.hash(randomPassword, 10);
+        
+        const newUser = this.usersRepository.create({
+          email,
+          password: hashedPassword,
+          nombre,
+          apellido,
+          foto,
+          role: Role.CLIENTE,
+          activo: true
+        });
+        user = await this.usersRepository.save(newUser);
+      } else if (foto && user.foto !== foto) {
+        // Opción: Actualizar la foto si cambió en Google (sincronizar photo)
+        user.foto = foto;
+        await this.usersRepository.save(user);
+      }
+
+      // Assert user is not null here since it was either found or created
+      const validatedUser = user!;
+
+      const payload = { sub: validatedUser.id, email: validatedUser.email, role: validatedUser.role };
+      const accessToken = await this.jwtService.signAsync(payload);
+
+      return {
+        accessToken,
+        user: {
+          id: validatedUser.id,
+          email: validatedUser.email,
+          nombre: validatedUser.nombre,
+          apellido: validatedUser.apellido,
+          Role: validatedUser.role,
+          foto: validatedUser.foto,
+        },
+      };
+
+    } catch (error) {
+      console.error('Error verificando token de Google:', error);
+      throw new UnauthorizedException('Token de Google inválido o expirado');
+    }
   }
 
   async findAll(): Promise<User[]> {

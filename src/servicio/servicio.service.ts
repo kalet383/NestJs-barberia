@@ -41,7 +41,8 @@ export class ServicioService {
   async update(id: number, updateServicioDto: UpdateServicioDto): Promise<Servicio> {
     const servicio = await this.findOne(id);
     Object.assign(servicio, updateServicioDto);
-    return await this.servicioRepository.save(servicio);
+    await this.servicioRepository.save(servicio);
+    return await this.findOne(id); // Retornar el objeto completo refrescado
   }
 
   async remove(id: number) {

@@ -15,10 +15,7 @@ export class NotificationService {
 
   async crearNotificacionNuevaVenta(ventaId: number, clienteNombre: string) {
     const admins = await this.userRepository.find({
-      where: [
-        { role: Role.ADMINISTRADOR },
-        { role: Role.SUPERADMIN }
-      ]
+      where: { role: Role.ADMINISTRADOR }
     });
 
     const notificaciones = admins.map(admin => 
@@ -55,10 +52,7 @@ export class NotificationService {
     clienteNombre: string
   ) {
     const admins = await this.userRepository.find({
-      where: [
-        { role: Role.ADMINISTRADOR },
-        { role: Role.SUPERADMIN }
-      ]
+      where: { role: Role.ADMINISTRADOR }
     });
 
     const notificaciones = admins.map(admin => 
@@ -72,6 +66,74 @@ export class NotificationService {
     );
 
     await this.notificationRepository.save(notificaciones);
+  }
+
+  async crearNotificacionNuevaCita(citaId: number, clienteNombre: string, barberoId: number) {
+    const notifs: any[] = [];
+
+    // Notificar al barbero asignado
+    notifs.push(this.notificationRepository.create({
+      tipo: TipoNotificacion.NUEVA_CITA,
+      mensaje: `Nueva cita #${citaId} agendada por ${clienteNombre}`,
+      usuarioId: barberoId,
+      leida: false
+    }));
+
+    // Solo notificar a administradores (NO superadmin)
+    const admins = await this.userRepository.find({ where: { role: Role.ADMINISTRADOR } });
+    admins.forEach(admin => notifs.push(this.notificationRepository.create({
+      tipo: TipoNotificacion.NUEVA_CITA,
+      mensaje: `Nueva cita #${citaId} agendada por ${clienteNombre}`,
+      usuarioId: admin.id,
+      leida: false
+    })));
+
+    await this.notificationRepository.save(notifs);
+  }
+
+  async crearNotificacionCambioCita(citaId: number, clienteId: number, barberoId: number, nuevoEstado: string) {
+    const notifs: any[] = [];
+
+    // Notificar al cliente
+    notifs.push(this.notificationRepository.create({
+      tipo: TipoNotificacion.CAMBIO_ESTADO_CITA,
+      mensaje: `Tu cita #${citaId} ha cambiado a: ${nuevoEstado}`,
+      usuarioId: clienteId,
+      leida: false
+    }));
+
+    // Notificar al barbero
+    notifs.push(this.notificationRepository.create({
+      tipo: TipoNotificacion.CAMBIO_ESTADO_CITA,
+      mensaje: `La cita #${citaId} ha cambiado a: ${nuevoEstado}`,
+      usuarioId: barberoId,
+      leida: false
+    }));
+
+    await this.notificationRepository.save(notifs);
+  }
+
+  async crearNotificacionCitaCancelada(citaId: number, clienteNombre: string, barberoId: number) {
+    const notifs: any[] = [];
+
+    // Notificar al barbero asignado
+    notifs.push(this.notificationRepository.create({
+      tipo: TipoNotificacion.CITA_CANCELADA,
+      mensaje: `Cita #${citaId} cancelada por ${clienteNombre}`,
+      usuarioId: barberoId,
+      leida: false
+    }));
+
+    // Solo notificar a administradores (NO superadmin)
+    const admins = await this.userRepository.find({ where: { role: Role.ADMINISTRADOR } });
+    admins.forEach(admin => notifs.push(this.notificationRepository.create({
+      tipo: TipoNotificacion.CITA_CANCELADA,
+      mensaje: `Cita #${citaId} cancelada por ${clienteNombre}`,
+      usuarioId: admin.id,
+      leida: false
+    })));
+
+    await this.notificationRepository.save(notifs);
   }
 
   async obtenerNotificacionesUsuario(usuarioId: number) {
