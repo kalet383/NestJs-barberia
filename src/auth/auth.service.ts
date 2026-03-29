@@ -10,13 +10,6 @@ import { HorarioBarbero } from 'src/horario-barbero/entities/horario-barbero.ent
 import { FranjaHoraria } from 'src/franja-horaria/entities/franja-horaria.entity';
 import * as admin from 'firebase-admin';
 
-// Inicializar Firebase Admin si no está inicializado ya
-if (admin.apps.length === 0) {
-  admin.initializeApp({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-  });
-}
-
 export class CreateBarberWithScheduleDto {
   nombre: string;
   apellido: string;
@@ -40,7 +33,20 @@ export class AuthService {
     @InjectRepository(FranjaHoraria)
     private readonly franjaHorariaRepository: Repository<FranjaHoraria>,
     private jwtService: JwtService,
-  ) {}
+  ) {
+    // Inicializar Firebase Admin si no está inicializado ya
+    if (admin.apps.length === 0) {
+      const projectId = process.env.FIREBASE_PROJECT_ID;
+      
+      if (!projectId) {
+        console.error('❌ ERROR: FIREBASE_PROJECT_ID no está definido en el archivo .env');
+      }
+
+      admin.initializeApp({
+        projectId: projectId || 'fallback-id-check-env',
+      });
+    }
+  }
 
   async register(registerDto: RegisterDto): Promise<User> {
     const { email, password, nombre, apellido, telefono, foto,  role } = registerDto;
