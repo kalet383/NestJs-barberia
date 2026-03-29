@@ -13,7 +13,7 @@ import * as admin from 'firebase-admin';
 // Inicializar Firebase Admin si no está inicializado ya
 if (admin.apps.length === 0) {
   admin.initializeApp({
-    projectId: 'barberiaweb-d116e',
+    projectId: process.env.FIREBASE_PROJECT_ID,
   });
 }
 
